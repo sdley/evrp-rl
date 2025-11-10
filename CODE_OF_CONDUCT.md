@@ -25,7 +25,7 @@ Examples of unacceptable behavior include:
 
 If you experience or witness any behavior that violates this Code of Conduct, please report it by contacting:
 
-contact: [your-email@example.com]
+contact: [sdley2020@gmail.com]
 
 Reports will be treated with confidentiality and respect. Appropriate action will be taken to address the issue.
 
