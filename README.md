@@ -42,7 +42,7 @@ The approach represents the routing problem as a graph, encompassing customers, 
 ### Installation
 
 ```shell
-git clone https://github.com/<your-username>/evrp-rl.git
+git clone https://github.com/sdley/evrp-rl.git
 cd evrp-rl
 pip install -r requirements.txt
 ```
