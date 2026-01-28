@@ -357,10 +357,14 @@ class ExperimentRunner:
             # Print progress
             if (epoch + 1) % 10 == 0:
                 train_stats = self.logger.get_recent_stats('train', window=10)
-                print(f"Epoch {epoch + 1}/{self.num_epochs} | "
-                      f"Reward: {train_stats['mean_reward']:.2f} ± {train_stats['std_reward']:.2f} | "
-                      f"Length: {train_stats['mean_length']:.1f} | "
-                      f"Actor Loss: {metrics['actor_loss']:.4f}")
+                if train_stats:
+                    # Get actor/loss metric if available (varies by agent type)
+                    loss_value = metrics.get('actor_loss', metrics.get('policy_loss', metrics.get('q_loss', 0.0))) if metrics else 0.0
+                    loss_str = f"{loss_value:.4f}" if loss_value else "N/A"
+                    print(f"Epoch {epoch + 1}/{self.num_epochs} | "
+                          f"Reward: {train_stats['mean_reward']:.2f} ± {train_stats['std_reward']:.2f} | "
+                          f"Length: {train_stats['mean_length']:.1f} | "
+                          f"Loss: {loss_str}")
             
             # Evaluation
             if (epoch + 1) % self.eval_frequency == 0:
@@ -384,10 +388,11 @@ class ExperimentRunner:
                 
                 # Print eval stats
                 eval_stats = self.logger.get_recent_stats('eval', window=self.num_eval_episodes)
-                print(f"  Eval Reward: {eval_stats['mean_reward']:.2f}")
-                print(f"  Success Rate: {eval_stats['success_rate']:.2%}")
-                print(f"  Avg Route Length: {eval_stats['mean_route_length']:.2f}")
-                print(f"  Avg Charge Visits: {eval_stats['mean_charge_visits']:.1f}")
+                if eval_stats:
+                    print(f"  Eval Reward: {eval_stats['mean_reward']:.2f}")
+                    print(f"  Success Rate: {eval_stats['success_rate']:.2%}")
+                    print(f"  Avg Route Length: {eval_stats['mean_route_length']:.2f}")
+                    print(f"  Avg Charge Visits: {eval_stats['mean_charge_visits']:.1f}")
                 
                 # Save best model
                 mean_eval_reward = np.mean(eval_rewards)
