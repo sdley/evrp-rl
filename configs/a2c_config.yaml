@@ -1,0 +1,41 @@
+# A2C Agent Configuration for EVRP
+
+agent: a2c
+
+# Encoder configuration
+encoder:
+  type: gat # Options: gat, mlp
+  embed_dim: 128
+  num_layers: 3
+  num_heads: 8
+  dropout: 0.1
+
+# Hyperparameters
+hyperparameters:
+  # Learning
+  lr: 3.0e-4
+  gamma: 0.99
+
+  # A2C specific
+  entropy_coef: 0.01
+  value_loss_coef: 0.5
+  max_grad_norm: 0.5
+  n_steps: 5
+
+  # Network architecture
+  hidden_dim: 256
+
+# Training configuration
+training:
+  num_episodes: 1000
+  max_steps_per_episode: 200
+  eval_frequency: 50
+  save_frequency: 100
+
+  # Environment
+  num_customers: 10
+  num_chargers: 3
+
+  # Logging
+  log_dir: results/a2c
+  save_dir: checkpoints/a2c

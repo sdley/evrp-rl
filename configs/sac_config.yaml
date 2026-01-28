@@ -1,0 +1,48 @@
+# SAC Agent Configuration for EVRP
+
+agent: sac
+
+# Encoder configuration
+encoder:
+  type: gat # Options: gat, mlp
+  embed_dim: 128
+  num_layers: 3
+  num_heads: 8
+  dropout: 0.1
+
+# Hyperparameters
+hyperparameters:
+  # Learning
+  lr: 3.0e-4
+  gamma: 0.99
+
+  # SAC specific
+  tau: 0.005 # Target network update rate
+  alpha: auto # Entropy temperature (auto for automatic tuning)
+  target_entropy: -5.0 # Target entropy for auto-tuning (negative for discrete)
+
+  # Replay buffer
+  buffer_size: 100000
+  batch_size: 256
+
+  # Warmup
+  warmup_steps: 1000 # Random actions before training
+
+  # Network architecture
+  hidden_dim: 256
+
+# Training configuration
+training:
+  num_episodes: 2000
+  max_steps_per_episode: 200
+  eval_frequency: 50
+  save_frequency: 100
+  train_frequency: 1 # Update every N steps
+
+  # Environment
+  num_customers: 10
+  num_chargers: 3
+
+  # Logging
+  log_dir: results/sac
+  save_dir: checkpoints/sac
