@@ -6,6 +6,7 @@ to compare against graph-based methods like GAT.
 """
 
 from typing import Dict, Tuple
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -83,23 +84,31 @@ class MLPEncoder(Encoder):
         # Node feature dimension: coords (2) + demand (1) + type (3) = 6
         self.node_feat_dim = 6
         
-        # Build MLP layers
+        # Build MLP layers with proper initialization
         layers = []
         
-        # Input layer
-        layers.append(nn.Linear(self.node_feat_dim, hidden_dim))
+        # Input layer with proper initialization
+        input_layer = nn.Linear(self.node_feat_dim, hidden_dim)
+        nn.init.orthogonal_(input_layer.weight, gain=np.sqrt(2))  # Adjust gain
+        nn.init.zeros_(input_layer.bias)
+        layers.append(input_layer)
         layers.append(nn.ReLU())
         layers.append(nn.Dropout(dropout))
         
         # Hidden layers
         for _ in range(num_layers - 2):
-            layers.append(nn.Linear(hidden_dim, hidden_dim))
-            layers.append(nn.LayerNorm(hidden_dim))
+            hidden_layer = nn.Linear(hidden_dim, hidden_dim)
+            nn.init.orthogonal_(hidden_layer.weight, gain=np.sqrt(2))
+            nn.init.zeros_(hidden_layer.bias)
+            layers.append(hidden_layer)
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout))
         
-        # Output layer
-        layers.append(nn.Linear(hidden_dim, embed_dim))
+        # Output layer with careful initialization
+        output_layer = nn.Linear(hidden_dim, embed_dim)
+        nn.init.orthogonal_(output_layer.weight, gain=1.0)
+        nn.init.zeros_(output_layer.bias)
+        layers.append(output_layer)
         
         self.mlp = nn.Sequential(*layers)
         
@@ -115,7 +124,7 @@ class MLPEncoder(Encoder):
         node_types: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Concatenate node features into a single tensor.
+        Concatenate and normalize node features into a single tensor.
         
         Args:
             node_coords: (batch, num_nodes, 2)
@@ -125,9 +134,25 @@ class MLPEncoder(Encoder):
         Returns:
             Node features (batch, num_nodes, 6)
         """
+        # Normalize coordinates to [0, 1] range
+        # Use min-max normalization per batch to handle varying scales
+        coords_min = node_coords.min()
+        coords_max = node_coords.max()
+        if coords_max > coords_min:
+            node_coords_norm = (node_coords - coords_min) / (coords_max - coords_min + 1e-8)
+        else:
+            node_coords_norm = torch.zeros_like(node_coords)
+        
         # Ensure demands have correct shape
         if node_demands.dim() == 2:
             node_demands = node_demands.unsqueeze(-1)
+        
+        # Normalize demands to [0, 1] range
+        demand_max = node_demands.max()
+        if demand_max > 0:
+            node_demands_norm = node_demands / (demand_max + 1e-8)
+        else:
+            node_demands_norm = torch.zeros_like(node_demands)
         
         # Convert node_types to one-hot if needed (from integer labels)
         if node_types.dim() == 2 and node_types.shape[-1] != 3:
@@ -148,9 +173,9 @@ class MLPEncoder(Encoder):
         
         # Concatenate all features
         node_features = torch.cat([
-            node_coords,      # (batch, num_nodes, 2)
-            node_demands,     # (batch, num_nodes, 1)
-            node_types,       # (batch, num_nodes, 3)
+            node_coords_norm,     # (batch, num_nodes, 2)
+            node_demands_norm,    # (batch, num_nodes, 1)
+            node_types,           # (batch, num_nodes, 3)
         ], dim=-1)
         
         return node_features
