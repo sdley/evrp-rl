@@ -299,8 +299,10 @@ class EVRPEnvironment(Env):
             self.visited_customers += 1
         
         # Update route tracking
+        step_distance = self.distance_matrix[self.current_node, next_node]
+        self.last_step_distance = float(step_distance)
         self.route.append(next_node)
-        self.total_distance += self.distance_matrix[self.current_node, next_node]
+        self.total_distance += step_distance
         
         # Move to next node
         self.current_node = next_node
@@ -400,6 +402,7 @@ class EVRPEnvironment(Env):
         self.current_step = 0
         self.route = [self.depot_idx]
         self.total_distance = 0.0
+        self.last_step_distance = 0.0
         self.infeasibility_penalty = 0.0
         
         info = self._get_info()
@@ -428,6 +431,7 @@ class EVRPEnvironment(Env):
             invalid_action_penalty = -10.0
             terminated = False
             truncated = self.current_step >= self.time_limit
+            self.last_step_distance = 0.0
             
             info = self._get_info()
             observation = self._get_observation()
@@ -479,12 +483,28 @@ class EVRPEnvironment(Env):
         Returns:
             Dictionary with info
         """
+        if self._is_depot(self.current_node):
+            node_type = "depot"
+        elif self._is_customer(self.current_node):
+            node_type = "customer"
+        elif self._is_charger(self.current_node):
+            node_type = "charger"
+        else:
+            node_type = "unknown"
+
+        all_customers_visited = self.visited_customers == self.num_customers
+        success = all_customers_visited and self._is_depot(self.current_node)
+
         info = {
             "current_node": self.current_node,
             "current_battery": float(self.current_battery),
             "current_cargo": float(self.current_cargo),
             "visited_customers": int(self.visited_customers),
             "total_distance": float(self.total_distance),
+            "distance": float(self.last_step_distance),
+            "node_type": node_type,
+            "all_customers_visited": bool(all_customers_visited),
+            "success": bool(success),
             "depot_visits": int(self.depot_visits),
             "charger_visits": int(self.charger_visits),
             "current_step": int(self.current_step),
