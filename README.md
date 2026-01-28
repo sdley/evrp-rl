@@ -49,13 +49,92 @@ pip install -r requirements.txt
 
 ### Running Experiments
 
-To train the RL agent:
+#### Using the Modular Framework (Recommended)
+
+The project now includes a **modular RL framework** for running configurable experiments:
+
+```python
+# Using YAML configuration
+from src.framework import ConfigLoader, run_experiment
+
+config = ConfigLoader.load('configs/experiment_config.yaml')
+run_experiment(config)
+```
+
+Or programmatically:
+
+```python
+from src.framework import create_experiment_config, run_experiment
+
+config = create_experiment_config(
+    env_config={'num_customers': 20, 'num_chargers': 5},
+    agent_config={'type': 'sac', 'encoder': {'type': 'gat'}},
+    run_config={'epochs': 100, 'name': 'my_experiment'}
+)
+run_experiment(config)
+```
+
+See [`src/framework/README.md`](src/framework/README.md) for complete documentation.
+
+#### Using Legacy Training Scripts
+
+To train the RL agent using legacy scripts:
 
 ```python
 python src/train_agent.py
 ```
 
 Other scripts and notebooks for evaluation and visualization are available in the `experiments/` directory.
+
+## Framework Features
+
+The modular framework (`src/framework/`) provides:
+
+- ✨ **Config-Driven**: Define experiments in YAML or Python
+- 🏭 **Factory Pattern**: Create environments, encoders, and agents from configs
+- 🎯 **Multiple Algorithms**: A2C and SAC agents
+- 🧠 **Flexible Encoders**: MLP and GAT (Graph Attention Network) encoders
+- 🎁 **Reward Shaping**: Custom penalties and bonuses
+- 🎭 **Action Masking**: Battery-aware and cargo-aware constraints
+- 📊 **Metrics Logging**: Comprehensive tracking and visualization
+- 💾 **Checkpointing**: Automatic model saving and best model tracking
+- 🧪 **Well-Tested**: 32 unit tests covering all components
+
+**Quick Example**: See [`examples/ablation_study.ipynb`](examples/ablation_study.ipynb) for a complete ablation study.
+
+## Project Status
+
+### ✅ Completed
+
+1. **Environment Implementation**:
+
+   - EVRPEnvironment with battery and cargo constraints
+   - Charging station and depot mechanics
+   - Action masking for valid moves
+
+2. **Agent Implementations**:
+
+   - A2C (Advantage Actor-Critic) with stable training
+   - SAC (Soft Actor-Critic) with automatic entropy tuning
+   - Fixed NaN gradient issues (see [docs/NAN_GRADIENT_FIX.md](docs/NAN_GRADIENT_FIX.md))
+
+3. **Encoder Architectures**:
+
+   - MLP encoder (baseline)
+   - GAT encoder (graph attention for spatial relationships)
+
+4. **Modular Framework**:
+   - Factory classes for env/encoder/agent creation
+   - Reward shaping and action masking modules
+   - Experiment runner with training/evaluation loops
+   - Metrics logging and visualization
+   - Comprehensive tests (32/32 passing)
+
+### 🔄 In Progress
+
+- Hyperparameter tuning and optimization
+- Additional encoder architectures (Transformer)
+- More RL algorithms (PPO, DQN)
 
 ## Usage
 
