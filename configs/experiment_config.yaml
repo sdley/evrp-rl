@@ -1,0 +1,70 @@
+# Example Experiment Configuration for EVRP RL Framework
+
+# Experiment name
+name: evrp_sac_experiment
+
+# Environment configuration
+env:
+  num_customers: 20
+  num_chargers: 5
+  battery_capacity: 100.0
+  cargo_capacity: 50.0
+  max_demand: 20.0
+  grid_size: 100
+  seed: 42
+
+# Agent configuration
+agent:
+  type: sac # Options: a2c, sac
+
+  # Encoder configuration
+  encoder:
+    type: gat # Options: gat, mlp
+    embed_dim: 128
+    num_layers: 3
+    num_heads: 8
+    edge_dim: 1
+    dropout: 0.1
+
+  # Hyperparameters
+  hyperparameters:
+    # Learning
+    lr: 3.0e-4
+    gamma: 0.99
+
+    # SAC specific
+    tau: 0.005
+    alpha: auto # Automatic entropy tuning
+    target_entropy: auto
+    buffer_size: 100000
+    batch_size: 64
+    learning_starts: 1000
+
+    # Network architecture
+    hidden_dim: 256
+
+# Reward shaping (optional)
+reward:
+  invalid_action_penalty: -10.0
+  battery_penalty_coef: 0.1
+  cargo_penalty_coef: 0.1
+  distance_penalty_coef: 0.01
+  charging_penalty: -0.5
+  completion_bonus: 10.0
+
+# Action masking (optional)
+mask:
+  use_battery_constraint: true
+  use_cargo_constraint: true
+  use_feasibility_check: true
+  battery_safety_margin: 0.1
+
+# Run configuration
+run:
+  epochs: 100
+  eval_frequency: 10
+  save_frequency: 20
+  max_steps_per_episode: 200
+  num_eval_episodes: 10
+  seed: 42
+  device: cpu # Options: cpu, cuda
