@@ -18,6 +18,13 @@ torch-sparse>=0.6.0
 # Visualization
 matplotlib>=3.5.0
 
+# Configuration management
+pyyaml>=6.0.0
+
+# Logging and monitoring
+tensorboard>=2.10.0
+wandb>=0.13.0
+
 # Development and testing
 pytest>=7.0.0
 pytest-cov>=4.0.0
