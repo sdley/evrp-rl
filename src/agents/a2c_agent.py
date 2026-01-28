@@ -244,6 +244,8 @@ class A2CAgent(BaseAgent):
             if deterministic:
                 action = action_logits.argmax(dim=-1).item()
                 log_prob = F.log_softmax(action_logits, dim=-1)[0, action]
+                # Compute probs for entropy (even in deterministic mode for logging)
+                probs = F.softmax(action_logits, dim=-1)
             else:
                 # Add numerical stability to softmax
                 probs = F.softmax(action_logits, dim=-1)
