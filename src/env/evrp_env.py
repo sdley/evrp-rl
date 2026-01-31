@@ -310,9 +310,16 @@ class EVRPEnvironment(Env):
     
     def _compute_reward(self, next_node: int) -> float:
         """
-        Compute reward for the transition.
+        Compute reward with dense shaping for efficient learning.
         
-        Reward = -distance - charger_visits * cost - depot_revisits * cost - infeasibility
+        Reward components:
+        - Step penalty: Small cost per step to encourage efficiency
+        - Customer reward: Large positive for visiting new customers
+        - Completion bonus: Large reward for completing all customers + returning to depot
+        - Efficiency bonus: Extra reward for shorter routes
+        - Distance guidance: Small reward for moving toward unvisited customers
+        - Revisit penalty: Discourage visiting already-served customers
+        - Invalid penalties: Penalize battery depletion and invalid actions
         
         Args:
             next_node: Next node index
@@ -320,23 +327,51 @@ class EVRPEnvironment(Env):
         Returns:
             Reward value
         """
-        distance_cost = -self.distance_matrix[self.current_node, next_node]
+        reward = 0.0
         
-        # Penalty for charger visits (except if charging is necessary)
-        charger_penalty = -self.charger_cost if self._is_charger(next_node) else 0.0
+        # Small step penalty to encourage efficiency (reduced from -1.0)
+        reward -= 0.1
         
-        # Penalty for depot revisits (after first visit)
-        depot_penalty = 0.0
-        if self._is_depot(next_node) and self.current_step > 0:
-            depot_penalty = -self.depot_revisit_cost
+        # Check if visiting a new customer
+        is_new_customer = self._is_customer(next_node) and not self.visited_mask[next_node]
         
-        # Penalty for infeasibility (negative battery)
-        infeasibility = max(0, -self.current_battery)
-        infeasibility_penalty = -infeasibility
+        # Positive reward for visiting new customer
+        if is_new_customer:
+            reward += 10.0
         
-        total_reward = distance_cost + charger_penalty + depot_penalty + infeasibility_penalty
+        # Penalty for revisiting already-served customer
+        elif self._is_customer(next_node) and self.visited_mask[next_node]:
+            reward -= 1.0
         
-        return float(total_reward)
+        # Check if all customers are now visited (before moving)
+        customers_before = self.visited_customers
+        all_customers_visited = (customers_before + (1 if is_new_customer else 0)) == self.num_customers
+        
+        # Completion bonus: all customers visited AND returning to depot
+        if all_customers_visited and self._is_depot(next_node):
+            reward += 50.0
+            # Efficiency bonus: reward shorter routes
+            efficiency_bonus = max(0, 50 - len(self.route))
+            reward += efficiency_bonus
+        
+        # Distance guidance: small reward for moving closer to nearest unvisited customer
+        if not all_customers_visited:
+            unvisited_customers = [i for i in range(self.customer_start_idx, self.customer_end_idx + 1) 
+                                   if not self.visited_mask[i]]
+            if unvisited_customers:
+                # Distance from current node to nearest unvisited
+                current_to_nearest = min([self.distance_matrix[self.current_node, c] for c in unvisited_customers])
+                # Distance from next node to nearest unvisited
+                next_to_nearest = min([self.distance_matrix[next_node, c] for c in unvisited_customers])
+                # Small reward if getting closer
+                if next_to_nearest < current_to_nearest:
+                    reward += 0.1
+        
+        # Penalty for battery depletion
+        if self.current_battery < 0:
+            reward -= 5.0
+        
+        return float(reward)
     
     def _is_depot(self, node_idx: int) -> bool:
         """Check if node is the depot."""
@@ -448,6 +483,10 @@ class EVRPEnvironment(Env):
         terminated = self._check_episode_done()
         truncated = self.current_step >= self.time_limit
         
+        # Add timeout penalty if truncated without completion
+        if truncated and not terminated:
+            reward -= 20.0
+        
         info = self._get_info()
         observation = self._get_observation()
         
@@ -456,20 +495,29 @@ class EVRPEnvironment(Env):
     def _get_observation(self) -> Dict:
         """
         Get current observation as dictionary with static and dynamic state.
+        Includes normalization for stable learning.
         
         Returns:
             Dictionary with observation components
         """
         valid_actions = self._get_valid_actions()
         
+        # Normalize distance matrix to [0, 1] range
+        max_dist = np.max(self.distance_matrix) if np.max(self.distance_matrix) > 0 else 1.0
+        normalized_distances = self.distance_matrix / max_dist
+        
+        # Normalize coordinates to [0, 1] range
+        coord_max = np.max(self.node_coords) if np.max(self.node_coords) > 0 else 1.0
+        normalized_coords = self.node_coords / coord_max
+        
         observation = {
-            "node_coords": self.node_coords.astype(np.float32),
-            "distance_matrix": self.distance_matrix.astype(np.float32),
+            "node_coords": normalized_coords.astype(np.float32),
+            "distance_matrix": normalized_distances.astype(np.float32),
             "node_demands": self.node_demands.astype(np.float32),
             "node_types": self.node_types.astype(np.int32),
             "current_node": np.array(self.current_node, dtype=np.int32),
-            "current_battery": np.array([self.current_battery], dtype=np.float32),
-            "current_cargo": np.array([self.current_cargo], dtype=np.float32),
+            "current_battery": np.array([self.current_battery / self.max_battery], dtype=np.float32),
+            "current_cargo": np.array([self.current_cargo / self.max_cargo], dtype=np.float32),
             "visited_mask": self.visited_mask.astype(np.int32),
             "valid_actions_mask": valid_actions,
         }
