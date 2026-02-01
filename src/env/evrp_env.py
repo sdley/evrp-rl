@@ -258,6 +258,12 @@ class EVRPEnvironment(Env):
             if self.current_cargo + demand > self.max_cargo:
                 valid_actions[customer_idx] = False
         
+        # CRITICAL FIX: If all customers visited, ONLY depot should be valid
+        # This prevents agents from getting stuck in charging loops
+        if self.visited_customers == self.num_customers:
+            valid_actions[:] = False
+            valid_actions[self.depot_idx] = True
+        
         # Allow depot as fallback if at least one valid action exists
         # (ensures agent can always return to depot)
         if not valid_actions.any():
@@ -366,12 +372,26 @@ class EVRPEnvironment(Env):
                 # Small reward if getting closer
                 if next_to_nearest < current_to_nearest:
                     reward += 0.1
+        else:
+            # DEPOT GUIDANCE: When all customers visited, guide agent toward depot
+            if not self._is_depot(next_node):
+                current_to_depot = self.distance_matrix[self.current_node, self.depot_idx]
+                next_to_depot = self.distance_matrix[next_node, self.depot_idx]
+                if next_to_depot < current_to_depot:
+                    reward += 1.0  # Reward getting closer to depot
+                else:
+                    reward -= 0.5  # Penalty for moving away from depot
         
         # Penalty for battery depletion
         if self.current_battery < 0:
             reward -= 5.0
         
-        return float(reward)
+        # Normalize reward to reasonable range for stable learning
+        # Expected range: -25 (timeout/failure) to +104 (perfect 6-step solution)
+        # Scale to approximately [-1, +1]
+        reward_normalized = reward / 50.0  # Typical good episode ~50-100
+        
+        return float(reward_normalized)
     
     def _is_depot(self, node_idx: int) -> bool:
         """Check if node is the depot."""
