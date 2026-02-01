@@ -329,13 +329,13 @@ class EVRPEnvironment(Env):
         """
         reward = 0.0
         
-        # Small step penalty to encourage efficiency (reduced from -1.0)
-        reward -= 0.1
+        # Small step penalty to encourage efficiency
+        reward -= 0.05  # Reduced from 0.1 for smoother gradients
         
-        # Check if visiting a new customer
+        # Check if visiting a new customer (check BEFORE state is updated)
         is_new_customer = self._is_customer(next_node) and not self.visited_mask[next_node]
         
-        # Positive reward for visiting new customer
+        # Positive reward for visiting new customer (given immediately!)
         if is_new_customer:
             reward += 10.0
         
@@ -349,9 +349,9 @@ class EVRPEnvironment(Env):
         
         # Completion bonus: all customers visited AND returning to depot
         if all_customers_visited and self._is_depot(next_node):
-            reward += 50.0
+            reward += 30.0  # Reduced from 50 since we already gave +50 from customer rewards
             # Efficiency bonus: reward shorter routes
-            efficiency_bonus = max(0, 50 - len(self.route))
+            efficiency_bonus = max(0, 30 - len(self.route))  # Proportionally reduced
             reward += efficiency_bonus
         
         # Distance guidance: small reward for moving closer to nearest unvisited customer
@@ -473,11 +473,12 @@ class EVRPEnvironment(Env):
             
             return observation, invalid_action_penalty, terminated, truncated, info
         
-        # Update state
-        self._update_state(action)
-        
-        # Compute reward
+        # CRITICAL: Compute reward BEFORE updating state
+        # This ensures customer rewards are given immediately when visiting new customers
         reward = self._compute_reward(action)
+        
+        # Update state (this changes visited_mask)
+        self._update_state(action)
         
         # Check termination
         terminated = self._check_episode_done()
