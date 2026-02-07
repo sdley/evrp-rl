@@ -29,6 +29,12 @@ The approach represents the routing problem as a graph, encompassing customers, 
 ┗ CODE_OF_CONDUCT.md
 ```
 
+## Architecture
+
+![Architecture diagram](docs/architecture_diagram.svg)
+
+See `docs/ARCHITECTURE_DIAGRAM.md` for a Mermaid source, ASCII fallback, sequence diagram, data shapes, and extension points.
+
 ## Getting Started
 
 ### Prerequisites
@@ -107,19 +113,16 @@ The modular framework (`src/framework/`) provides:
 ### ✅ Completed
 
 1. **Environment Implementation**:
-
    - EVRPEnvironment with battery and cargo constraints
    - Charging station and depot mechanics
    - Action masking for valid moves
 
 2. **Agent Implementations**:
-
    - A2C (Advantage Actor-Critic) with stable training
    - SAC (Soft Actor-Critic) with automatic entropy tuning
    - Fixed NaN gradient issues (see [docs/NAN_GRADIENT_FIX.md](docs/NAN_GRADIENT_FIX.md))
 
 3. **Encoder Architectures**:
-
    - MLP encoder (baseline)
    - GAT encoder (graph attention for spatial relationships)
 
