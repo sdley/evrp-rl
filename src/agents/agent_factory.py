@@ -83,19 +83,26 @@ class AgentFactory:
         Returns:
             Initialized agent
         """
-        # Get agent type
-        agent_type = config.get('agent', 'a2c').lower()
+        # Support two config styles:
+        # 1) legacy flat config with keys: 'agent': 'a2c', 'encoder': {...}, 'hyperparameters': {...}
+        # 2) unified config where 'agent' is a dict: {'type': 'a2c', 'encoder': {...}, 'hyperparameters': {...}}
+        agent_section = config.get('agent', {})
+        if isinstance(agent_section, dict):
+            agent_type = agent_section.get('type', 'a2c').lower()
+            encoder_config = agent_section.get('encoder', {})
+            hyperparams = agent_section.get('hyperparameters', {})
+        else:
+            agent_type = str(agent_section).lower()
+            encoder_config = config.get('encoder', {})
+            hyperparams = config.get('hyperparameters', {})
+
         if agent_type not in cls.AGENT_REGISTRY:
             raise ValueError(f"Unknown agent type: {agent_type}. "
-                           f"Available: {list(cls.AGENT_REGISTRY.keys())}")
-        
+                             f"Available: {list(cls.AGENT_REGISTRY.keys())}")
+
         # Create encoder
-        encoder_config = config.get('encoder', {})
         encoder = cls._create_encoder(encoder_config)
-        
-        # Get hyperparameters
-        hyperparams = config.get('hyperparameters', {})
-        
+
         # Create agent
         agent_class = cls.AGENT_REGISTRY[agent_type]
         agent = agent_class(encoder, action_dim, hyperparams)
