@@ -1,0 +1,45 @@
+# Example agent configurations demonstrating the unified `agent` format
+# Each example shows a minimal `env`, `agent` (as a dict) and `run` section.
+# Adapt fields to your project's expected schema.
+examples:
+  a2c_example:
+    env:
+      name: evrp-v0
+      num_customers: 20
+      vehicle_capacity: 100
+    agent:
+      type: a2c
+      encoder: gat
+      hyperparameters:
+        lr: 0.0007
+        gamma: 0.99
+        ent_coef: 0.01
+        value_coef: 0.5
+    run:
+      seed: 0
+      epochs: 100
+      batch_size: 64
+      eval_interval: 10
+
+  sac_example:
+    env:
+      name: evrp-v0
+      num_customers: 20
+      vehicle_capacity: 100
+    agent:
+      type: sac
+      encoder: mlp
+      hyperparameters:
+        lr: 0.0003
+        gamma: 0.99
+        tau: 0.005
+        alpha: 0.2
+    run:
+      seed: 1
+      epochs: 100
+      batch_size: 256
+      eval_interval: 10
+
+# Usage note:
+# - Load this file and select `examples.<name>` as your experiment config
+#   or copy the desired block into `configs/experiment_config.yaml`.
