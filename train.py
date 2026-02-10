@@ -2,8 +2,10 @@
 Training script for EVRP agents.
 
 Usage:
-    python train.py --config configs/a2c_config.yaml
-    python train.py --config configs/sac_config.yaml --device cuda
+    python train.py --config configs/experiment_config.yaml
+    python train.py --config configs/experiment_config.yaml --device cuda
+
+Tip: set `agent.type` inside the YAML (`a2c`, `sac`, etc.) to switch algorithms.
 """
 
 import argparse
@@ -50,7 +52,7 @@ class Trainer:
         self.device = torch.device(device)
         self.seed = seed
         
-        # Load configuration
+        # Load configuration (support unified config with 'env', 'agent', 'run')
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
@@ -58,11 +60,14 @@ class Trainer:
         torch.manual_seed(seed)
         np.random.seed(seed)
         
-        # Create environment
-        env_config = self.config.get('training', {})
+        # Environment configuration: prefer `env` section, fall back to legacy `training`
+        env_config = self.config.get('env', self.config.get('training', {}))
         self.env = EVRPEnvironment(
             num_customers=env_config.get('num_customers', 10),
             num_chargers=env_config.get('num_chargers', 3),
+            max_battery=env_config.get('battery_capacity', env_config.get('max_battery', 100.0)),
+            max_cargo=env_config.get('cargo_capacity', env_config.get('max_cargo', 100.0)),
+            time_limit=env_config.get('time_limit', env_config.get('max_steps_per_episode', 200)),
             seed=seed,
         )
         
@@ -71,11 +76,19 @@ class Trainer:
         self.agent = AgentFactory.create_from_dict(self.config, action_dim)
         self.agent.to(self.device)
         
-        # Training configuration
-        self.num_episodes = env_config.get('num_episodes', 1000)
-        self.max_steps = env_config.get('max_steps_per_episode', 200)
-        self.eval_frequency = env_config.get('eval_frequency', 50)
-        self.save_frequency = env_config.get('save_frequency', 100)
+        # Run/training configuration: prefer `run` section, fall back to legacy `training`
+        run_config = self.config.get('run', self.config.get('training', {}))
+        self.num_episodes = run_config.get('epochs', run_config.get('num_episodes', 1000))
+        self.max_steps = run_config.get('max_steps_per_episode', env_config.get('time_limit', 200))
+        self.eval_frequency = run_config.get('eval_frequency', 50)
+        self.save_frequency = run_config.get('save_frequency', 100)
+
+        # Resolve agent type string for conditional logic and logging
+        agent_section = self.config.get('agent', {})
+        if isinstance(agent_section, dict):
+            self.agent_type = agent_section.get('type', 'a2c').lower()
+        else:
+            self.agent_type = str(agent_section).lower()
         
         # Create directories
         self.log_dir = Path(env_config.get('log_dir', 'results'))
@@ -90,7 +103,7 @@ class Trainer:
     
     def train(self):
         """Run training loop."""
-        print(f"Starting training with {self.config['agent'].upper()} agent")
+        print(f"Starting training with {self.agent_type.upper()} agent")
         print(f"Device: {self.device}")
         print(f"Episodes: {self.num_episodes}")
         print(f"Environment: {self.env.num_customers} customers, {self.env.num_chargers} chargers")
@@ -143,7 +156,7 @@ class Trainer:
         episode_length = 0
         
         # For A2C: collect rollout
-        if self.config['agent'] == 'a2c':
+        if self.agent_type == 'a2c':
             rollout = {
                 'observations': [],
                 'actions': [],
@@ -163,9 +176,9 @@ class Trainer:
             done = terminated or truncated
             
             # Store experience
-            if self.config['agent'] == 'sac':
+            if self.agent_type == 'sac':
                 self.agent.store_transition(obs, action, reward, next_obs, done)
-            elif self.config['agent'] == 'a2c':
+            elif self.agent_type == 'a2c':
                 rollout['observations'].append(obs)
                 rollout['actions'].append(action)
                 rollout['rewards'].append(reward)
@@ -181,9 +194,9 @@ class Trainer:
         
         # Update agent
         metrics = {}
-        if self.config['agent'] == 'a2c' and len(rollout['observations']) > 0:
+        if self.agent_type == 'a2c' and len(rollout['observations']) > 0:
             metrics = self.agent.update(rollout)
-        elif self.config['agent'] == 'sac':
+        elif self.agent_type == 'sac':
             train_freq = self.config.get('training', {}).get('train_frequency', 1)
             if episode % train_freq == 0:
                 metrics = self.agent.update({})
