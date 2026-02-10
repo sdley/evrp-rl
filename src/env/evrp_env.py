@@ -337,13 +337,17 @@ class EVRPEnvironment(Env):
         
         # Small step penalty to encourage efficiency
         reward -= 0.05  # Reduced from 0.1 for smoother gradients
+
+        # Distance travel cost (penalize longer moves)
+        step_distance = self.distance_matrix[self.current_node, next_node]
+        reward -= float(step_distance)
         
         # Check if visiting a new customer (check BEFORE state is updated)
         is_new_customer = self._is_customer(next_node) and not self.visited_mask[next_node]
         
-        # Positive reward for visiting new customer (given immediately!)
+        # Positive reward for visiting new customer (small immediate bonus)
         if is_new_customer:
-            reward += 10.0
+            reward += 1.0
         
         # Penalty for revisiting already-served customer
         elif self._is_customer(next_node) and self.visited_mask[next_node]:
