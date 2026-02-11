@@ -1,0 +1,15 @@
+agent:
+  encoder:
+    hidden_dim: 64
+    type: gat
+  type: sac
+hyperparameters:
+  alpha: 0.2
+  batch_size: 256
+  epochs: 100
+  gamma: 0.99
+  learning_rate: 0.0003
+  learning_starts: 1000
+  replay_buffer_size: 100000
+  target_update_interval: 1
+  tau: 0.005
