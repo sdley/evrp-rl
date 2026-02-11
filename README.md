@@ -82,6 +82,14 @@ run_experiment(config)
 
 See [`src/framework/README.md`](src/framework/README.md) for complete documentation.
 
+### Full Pipeline Prompt Example
+
+If you want a single script that runs a complete end-to-end experiment (parses YAML, initializes modular components, runs training on synthetic benchmarks, evaluates on held-out scenarios, plots convergence, and performs greedy inference), use the prompt below as a concise spec for a `scripts/train_full.py` implementation or for README examples:
+
+"Complete end-to-end train script: parse YAML, init modular components, train on synthetic benchmarks (gen 1M instances like Node20/5). Eval on held-out, plot convergence. Inference: greedy decode (argmax no sample). Reference Reinforce-paper end-to-end GAT+attention decoder."
+
+A scaffold script is available at `scripts/train_full.py` which demonstrates a safe, short demo run and can be scaled by setting `num_train_episodes` / `num_eval_episodes` in your YAML or using CLI flags.
+
 #### Using Legacy Training Scripts
 
 To train the RL agent using legacy scripts:
