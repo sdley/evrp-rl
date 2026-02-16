@@ -316,16 +316,19 @@ class EVRPEnvironment(Env):
     
     def _compute_reward(self, next_node: int) -> float:
         """
-        Compute reward with dense shaping for efficient learning.
+        Compute reward with sparse shaping to encourage efficient single-visit routing.
         
-        Reward components:
-        - Step penalty: Small cost per step to encourage efficiency
-        - Customer reward: Large positive for visiting new customers
-        - Completion bonus: Large reward for completing all customers + returning to depot
-        - Efficiency bonus: Extra reward for shorter routes
-        - Distance guidance: Small reward for moving toward unvisited customers
-        - Revisit penalty: Discourage visiting already-served customers
-        - Invalid penalties: Penalize battery depletion and invalid actions
+        NEW REWARD STRUCTURE (Sparse + Shaped):
+        - +10 for visiting unserved customer (strong positive signal)
+        - -1 for revisiting served customer (discourage loops)
+        - -0.1 per step (time penalty for efficiency)
+        - +50 bonus for completing all customers (goal achievement)
+        
+        This structure is designed to:
+        1. Strongly encourage visiting new customers
+        2. Strongly discourage revisits and loops
+        3. Minimize route length through step penalty
+        4. Provide clear terminal goal signal
         
         Args:
             next_node: Next node index
@@ -335,67 +338,36 @@ class EVRPEnvironment(Env):
         """
         reward = 0.0
         
-        # Small step penalty to encourage efficiency
-        reward -= 0.05  # Reduced from 0.1 for smoother gradients
-
-        # Distance travel cost (penalize longer moves)
-        step_distance = self.distance_matrix[self.current_node, next_node]
-        reward -= float(step_distance)
+        # -0.1 per step (time penalty)
+        reward -= 0.1
         
         # Check if visiting a new customer (check BEFORE state is updated)
         is_new_customer = self._is_customer(next_node) and not self.visited_mask[next_node]
+        is_revisited_customer = self._is_customer(next_node) and self.visited_mask[next_node]
         
-        # Positive reward for visiting new customer (small immediate bonus)
+        # +10 for visiting unserved customer
         if is_new_customer:
-            reward += 1.0
+            reward += 10.0
         
-        # Penalty for revisiting already-served customer
-        elif self._is_customer(next_node) and self.visited_mask[next_node]:
+        # -1 for revisiting served customer
+        elif is_revisited_customer:
             reward -= 1.0
         
-        # Check if all customers are now visited (before moving)
-        customers_before = self.visited_customers
-        all_customers_visited = (customers_before + (1 if is_new_customer else 0)) == self.num_customers
+        # Check if all customers will be visited after this action
+        customers_after = self.visited_customers + (1 if is_new_customer else 0)
+        all_customers_visited = customers_after == self.num_customers
         
-        # Completion bonus: all customers visited AND returning to depot
-        if all_customers_visited and self._is_depot(next_node):
-            reward += 30.0  # Reduced from 50 since we already gave +50 from customer rewards
-            # Efficiency bonus: reward shorter routes
-            efficiency_bonus = max(0, 30 - len(self.route))  # Proportionally reduced
-            reward += efficiency_bonus
+        # +50 bonus for completing all customers
+        if all_customers_visited and not hasattr(self, '_completion_bonus_given'):
+            reward += 50.0
+            # Mark bonus as given (prevent double-counting)
+            self._completion_bonus_given = True
         
-        # Distance guidance: small reward for moving closer to nearest unvisited customer
-        if not all_customers_visited:
-            unvisited_customers = [i for i in range(self.customer_start_idx, self.customer_end_idx + 1) 
-                                   if not self.visited_mask[i]]
-            if unvisited_customers:
-                # Distance from current node to nearest unvisited
-                current_to_nearest = min([self.distance_matrix[self.current_node, c] for c in unvisited_customers])
-                # Distance from next node to nearest unvisited
-                next_to_nearest = min([self.distance_matrix[next_node, c] for c in unvisited_customers])
-                # Small reward if getting closer
-                if next_to_nearest < current_to_nearest:
-                    reward += 0.1
-        else:
-            # DEPOT GUIDANCE: When all customers visited, guide agent toward depot
-            if not self._is_depot(next_node):
-                current_to_depot = self.distance_matrix[self.current_node, self.depot_idx]
-                next_to_depot = self.distance_matrix[next_node, self.depot_idx]
-                if next_to_depot < current_to_depot:
-                    reward += 1.0  # Reward getting closer to depot
-                else:
-                    reward -= 0.5  # Penalty for moving away from depot
-        
-        # Penalty for battery depletion
+        # Optional: Small penalty for battery depletion (safety constraint)
         if self.current_battery < 0:
             reward -= 5.0
         
-        # Normalize reward to reasonable range for stable learning
-        # Expected range: -25 (timeout/failure) to +104 (perfect 6-step solution)
-        # Scale to approximately [-1, +1]
-        reward_normalized = reward / 50.0  # Typical good episode ~50-100
-        
-        return float(reward_normalized)
+        return float(reward)
     
     def _is_depot(self, node_idx: int) -> bool:
         """Check if node is the depot."""
@@ -463,6 +435,10 @@ class EVRPEnvironment(Env):
         self.total_distance = 0.0
         self.last_step_distance = 0.0
         self.infeasibility_penalty = 0.0
+        
+        # Reset completion bonus flag for new reward structure
+        if hasattr(self, '_completion_bonus_given'):
+            delattr(self, '_completion_bonus_given')
         
         info = self._get_info()
         observation = self._get_observation()
