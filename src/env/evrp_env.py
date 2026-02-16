@@ -318,17 +318,14 @@ class EVRPEnvironment(Env):
         """
         Compute reward with sparse shaping to encourage efficient single-visit routing.
         
-        NEW REWARD STRUCTURE (Sparse + Shaped):
-        - +10 for visiting unserved customer (strong positive signal)
-        - -1 for revisiting served customer (discourage loops)
-        - -0.1 per step (time penalty for efficiency)
-        - +50 bonus for completing all customers (goal achievement)
+        NORMALIZED REWARD STRUCTURE:
+        - +1.0 for visiting unserved customer 
+        - -0.5 for revisiting served customer (discourage loops)
+        - -0.01 per step (time penalty for efficiency)
+        - +2.0 bonus for completing all customers (goal achievement)
         
-        This structure is designed to:
-        1. Strongly encourage visiting new customers
-        2. Strongly discourage revisits and loops
-        3. Minimize route length through step penalty
-        4. Provide clear terminal goal signal
+        Total range: approximately -2 to +22 for a full episode
+        Normalized to be more stable for neural network learning.
         
         Args:
             next_node: Next node index
@@ -338,34 +335,34 @@ class EVRPEnvironment(Env):
         """
         reward = 0.0
         
-        # -0.1 per step (time penalty)
-        reward -= 0.1
+        # -0.01 per step (small time penalty)
+        reward -= 0.01
         
         # Check if visiting a new customer (check BEFORE state is updated)
         is_new_customer = self._is_customer(next_node) and not self.visited_mask[next_node]
         is_revisited_customer = self._is_customer(next_node) and self.visited_mask[next_node]
         
-        # +10 for visiting unserved customer
+        # +1.0 for visiting unserved customer
         if is_new_customer:
-            reward += 10.0
+            reward += 1.0
         
-        # -1 for revisiting served customer
+        # -0.5 for revisiting served customer (in case mask fails)
         elif is_revisited_customer:
-            reward -= 1.0
+            reward -= 0.5
         
         # Check if all customers will be visited after this action
         customers_after = self.visited_customers + (1 if is_new_customer else 0)
         all_customers_visited = customers_after == self.num_customers
         
-        # +50 bonus for completing all customers
+        # +2.0 bonus for completing all customers
         if all_customers_visited and not hasattr(self, '_completion_bonus_given'):
-            reward += 50.0
+            reward += 2.0
             # Mark bonus as given (prevent double-counting)
             self._completion_bonus_given = True
         
-        # Optional: Small penalty for battery depletion (safety constraint)
+        # Small penalty for battery depletion (safety constraint)
         if self.current_battery < 0:
-            reward -= 5.0
+            reward -= 1.0
         
         return float(reward)
     
@@ -462,11 +459,12 @@ class EVRPEnvironment(Env):
         # Check if action is valid
         valid_actions = self._get_valid_actions()
         if not valid_actions[action]:
-            # Invalid action: apply penalty and return current state
-            invalid_action_penalty = -10.0
+            # Invalid action: apply smaller penalty (scaled to match new reward range)
+            invalid_action_penalty = -1.0
             terminated = False
             truncated = self.current_step >= self.time_limit
             self.last_step_distance = 0.0
+            self.current_step += 1  # Still count the step
             
             info = self._get_info()
             observation = self._get_observation()
@@ -484,9 +482,9 @@ class EVRPEnvironment(Env):
         terminated = self._check_episode_done()
         truncated = self.current_step >= self.time_limit
         
-        # Add timeout penalty if truncated without completion
+        # Add timeout penalty if truncated without completion (scaled to new range)
         if truncated and not terminated:
-            reward -= 20.0
+            reward -= 2.0
         
         info = self._get_info()
         observation = self._get_observation()
