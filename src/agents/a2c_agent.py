@@ -401,8 +401,11 @@ class A2CAgent(BaseAgent):
         # Critic loss: Use Huber loss for robustness to outliers
         critic_loss = F.smooth_l1_loss(state_values, returns)
         
-        # Total loss
-        loss = actor_loss + self.value_loss_coef * critic_loss - self.entropy_coef * entropy
+        # Total loss: actor_loss + value_loss - entropy_bonus (entropy bonus encourages exploration)
+        # Entropy is high when policy is exploratory, so subtracting it (making loss more negative) is correct
+        # But we want to add entropy as a BONUS to encourage exploration, so we use - entropy_coef * (-entropy)
+        # which simplifies to + entropy_coef * entropy
+        loss = actor_loss + self.value_loss_coef * critic_loss + self.entropy_coef * entropy
         
         # Check for NaN in loss components before backward
         if torch.isnan(loss) or torch.isnan(actor_loss) or torch.isnan(critic_loss):
