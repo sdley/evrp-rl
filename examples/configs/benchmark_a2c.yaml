@@ -1,15 +1,15 @@
 agent:
   encoder:
-    hidden_dim: 64
+    hidden_dim: 32
     type: gat
   type: a2c
 hyperparameters:
   batch_size: 64
-  entropy_coef: 0.01
+  entropy_coef: 0.002
   epochs: 100
   gae_lambda: 0.95
   gamma: 0.99
-  learning_rate: 0.0001
-  max_grad_norm: 0.5
+  learning_rate: 0.001
+  max_grad_norm: 1.0
   n_steps: 512
   value_coef: 0.5
