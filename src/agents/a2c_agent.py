@@ -191,25 +191,25 @@ class A2CAgent(BaseAgent):
     ):
         """Initialize A2C agent."""
         super().__init__(encoder, action_dim, config)
-        
+
         # Extract hyperparameters
-        self.lr = config.get('lr', 3e-4)
+        self.lr = config.get('lr', config.get('learning_rate', 3e-4))
         self.gamma = config.get('gamma', 0.99)
         self.entropy_coef = config.get('entropy_coef', 0.01)
         self.value_loss_coef = config.get('value_loss_coef', 0.5)
         self.max_grad_norm = config.get('max_grad_norm', 0.5)
         self.n_steps = config.get('n_steps', 5)
-        
+
         # Create actor-critic network
         hidden_dim = config.get('hidden_dim', 256)
         self.ac_network = ActorCriticNetwork(encoder, action_dim, hidden_dim)
-        
+
         # Optimizer
         self.optimizer = torch.optim.Adam(self.ac_network.parameters(), lr=self.lr)
-        
+
         # FIX: Add running reward normalizer for training stability
         self.return_normalizer = RunningNormalizer(shape=())
-        
+
         # Training metrics
         self.actor_losses = []
         self.critic_losses = []

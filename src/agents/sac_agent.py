@@ -295,14 +295,14 @@ class SACAgent(BaseAgent):
     ):
         """Initialize SAC agent."""
         super().__init__(encoder, action_dim, config)
-        
+
         # Hyperparameters
-        self.lr = config.get('lr', 3e-4)
+        self.lr = config.get('lr', config.get('learning_rate', 3e-4))
         self.gamma = config.get('gamma', 0.99)
         self.tau = config.get('tau', 0.005)
         self.batch_size = config.get('batch_size', 256)
         self.buffer_size = config.get('buffer_size', 100000)
-        
+
         # Entropy temperature
         alpha_config = config.get('alpha', 'auto')
         if alpha_config == 'auto':
@@ -311,46 +311,49 @@ class SACAgent(BaseAgent):
             self.target_entropy = config.get('target_entropy', -action_dim * 0.5)
             self.log_alpha = nn.Parameter(torch.zeros(1))
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=self.lr)
+            self._fixed_alpha = None
         else:
             self.auto_entropy = False
-            self.log_alpha = torch.log(torch.tensor([alpha_config]))
-        
+            self._fixed_alpha = float(alpha_config)
+            self.log_alpha = torch.log(torch.tensor([self._fixed_alpha]))
+            self.alpha_optimizer = None
+
         hidden_dim = config.get('hidden_dim', 256)
-        
+
         # Create networks
         from copy import deepcopy
-        
+
         # Actor
         self.actor = Actor(encoder, action_dim, hidden_dim)
-        
+
         # Twin critics
         self.critic1 = Critic(deepcopy(encoder), action_dim, hidden_dim)
         self.critic2 = Critic(deepcopy(encoder), action_dim, hidden_dim)
-        
+
         # Target critics
         self.critic1_target = Critic(deepcopy(encoder), action_dim, hidden_dim)
         self.critic2_target = Critic(deepcopy(encoder), action_dim, hidden_dim)
-        
+
         self.critic1_target.load_state_dict(self.critic1.state_dict())
         self.critic2_target.load_state_dict(self.critic2.state_dict())
-        
+
         # Freeze target networks
         for param in self.critic1_target.parameters():
             param.requires_grad = False
         for param in self.critic2_target.parameters():
             param.requires_grad = False
-        
+
         # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
         self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(), lr=self.lr)
         self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(), lr=self.lr)
-        
+
         # Replay buffer
         self.replay_buffer = ReplayBuffer(self.buffer_size)
-        
+
         # FIX: Add running reward normalizer for training stability
         self.return_normalizer = RunningNormalizer(shape=())
-        
+
         # Metrics
         self.actor_losses = []
         self.critic_losses = []
@@ -358,7 +361,9 @@ class SACAgent(BaseAgent):
     
     @property
     def alpha(self) -> float:
-        """Get current entropy temperature."""
+        """Get current entropy temperature (fixed if set, else learned)."""
+        if self._fixed_alpha is not None:
+            return self._fixed_alpha
         return self.log_alpha.exp().item()
     
     def select_action(
