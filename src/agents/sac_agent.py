@@ -7,6 +7,7 @@ Implements maximum entropy RL with:
 - Automatic entropy temperature tuning
 - Replay buffer for off-policy learning
 - Action masking for invalid actions
+- Running reward normalization for training stability
 """
 
 from typing import Dict, Tuple, Any, List, Optional
@@ -19,6 +20,7 @@ from collections import deque
 import random
 
 from .base_agent import BaseAgent
+from ..framework.normalizers import RunningNormalizer
 
 
 class ReplayBuffer:
@@ -346,6 +348,9 @@ class SACAgent(BaseAgent):
         # Replay buffer
         self.replay_buffer = ReplayBuffer(self.buffer_size)
         
+        # FIX: Add running reward normalizer for training stability
+        self.return_normalizer = RunningNormalizer(shape=())
+        
         # Metrics
         self.actor_losses = []
         self.critic_losses = []
@@ -412,6 +417,9 @@ class SACAgent(BaseAgent):
         rewards = torch.tensor(batch['rewards'], dtype=torch.float, device=device)
         next_observations = batch['next_observations']
         dones = torch.tensor(batch['dones'], dtype=torch.float, device=device)
+        
+        # FIX: Update return normalizer with rewards for tracking statistics
+        self.return_normalizer.update(rewards.detach().cpu().numpy())
         
         # Prepare graph data
         graph_data = {

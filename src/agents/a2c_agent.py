@@ -6,6 +6,7 @@ Implements synchronous actor-critic with:
 - Parallel environment rollouts
 - Advantage estimation: A = R + gamma * V(s') - V(s)
 - Action masking for invalid actions
+- Running reward normalization for training stability
 """
 
 from typing import Dict, Tuple, Any, List, Optional
@@ -16,6 +17,7 @@ from torch.distributions import Categorical
 import numpy as np
 
 from .base_agent import BaseAgent
+from ..framework.normalizers import RunningNormalizer
 
 
 class ActorCriticNetwork(nn.Module):
@@ -205,6 +207,9 @@ class A2CAgent(BaseAgent):
         # Optimizer
         self.optimizer = torch.optim.Adam(self.ac_network.parameters(), lr=self.lr)
         
+        # FIX: Add running reward normalizer for training stability
+        self.return_normalizer = RunningNormalizer(shape=())
+        
         # Training metrics
         self.actor_losses = []
         self.critic_losses = []
@@ -342,7 +347,7 @@ class A2CAgent(BaseAgent):
         )
         
         # Clamp state values to prevent extreme gradients
-        state_values = torch.clamp(state_values, min=-1000, max=1000)
+        state_values = torch.clamp(state_values, min=-100, max=100)
         
         # Compute log probabilities and entropy
         probs = F.softmax(action_logits, dim=-1)
@@ -383,17 +388,18 @@ class A2CAgent(BaseAgent):
             
             advantages[t] = returns[t] - state_values[t].detach()
         
-        # Normalize advantages (only if we have multiple samples and variance is sufficient)
+        # FIX: Always normalize advantages (remove the threshold check)
+        # This is critical for stable policy gradients
         if len(advantages) > 1:
             adv_std = advantages.std()
-            if adv_std > 1e-4:  # Only normalize if there's sufficient variance
-                advantages = (advantages - advantages.mean()) / (adv_std + 1e-6)
-            else:
-                # If variance is too small, just center
-                advantages = advantages - advantages.mean()
+            advantages = (advantages - advantages.mean()) / (adv_std + 1e-6)
         else:
             # For single sample, just center at 0
             advantages = advantages - advantages.mean()
+        
+        # FIX: Update return normalizer with raw returns for tracking statistics
+        # This helps maintain consistent gradient magnitudes across training
+        self.return_normalizer.update(returns.detach().cpu().numpy())
         
         # Actor loss: -E[log pi(a|s) * A]
         actor_loss = -(action_log_probs * advantages).mean()
