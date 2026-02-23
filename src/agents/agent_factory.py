@@ -96,6 +96,54 @@ class AgentFactory:
             encoder_config = config.get('encoder', {})
             hyperparams = config.get('hyperparameters', {})
 
+        # --- PATCH: Map config keys to agent expected keys ---
+        key_map = {
+            'learning_rate': 'lr',
+            'value_coef': 'value_loss_coef',
+            'replay_buffer_size': 'buffer_size',
+        }
+        mapped_hyperparams = {}
+        for k, v in hyperparams.items():
+            mapped_key = key_map.get(k, k)
+            mapped_hyperparams[mapped_key] = v
+
+        # For SAC: ensure alpha is float if present
+        if agent_type == 'sac' and 'alpha' in mapped_hyperparams:
+            try:
+                mapped_hyperparams['alpha'] = float(mapped_hyperparams['alpha'])
+            except Exception:
+                pass
+
+        # For A2C: ensure entropy_coef is float if present
+        if agent_type == 'a2c' and 'entropy_coef' in mapped_hyperparams:
+            try:
+                mapped_hyperparams['entropy_coef'] = float(mapped_hyperparams['entropy_coef'])
+            except Exception:
+                pass
+
+        # For max_grad_norm: ensure float
+        if 'max_grad_norm' in mapped_hyperparams:
+            try:
+                mapped_hyperparams['max_grad_norm'] = float(mapped_hyperparams['max_grad_norm'])
+            except Exception:
+                pass
+        # --- END PATCH ---
+
+            # For A2C: ensure entropy_coef is float if present
+            if agent_type == 'a2c' and 'entropy_coef' in mapped_hyperparams:
+                try:
+                    mapped_hyperparams['entropy_coef'] = float(mapped_hyperparams['entropy_coef'])
+                except Exception:
+                    pass
+
+            # For max_grad_norm: ensure float
+            if 'max_grad_norm' in mapped_hyperparams:
+                try:
+                    mapped_hyperparams['max_grad_norm'] = float(mapped_hyperparams['max_grad_norm'])
+                except Exception:
+                    pass
+            # --- END PATCH ---
+
         if agent_type not in cls.AGENT_REGISTRY:
             raise ValueError(f"Unknown agent type: {agent_type}. "
                              f"Available: {list(cls.AGENT_REGISTRY.keys())}")
@@ -105,8 +153,7 @@ class AgentFactory:
 
         # Create agent
         agent_class = cls.AGENT_REGISTRY[agent_type]
-        agent = agent_class(encoder, action_dim, hyperparams)
-        
+        agent = agent_class(encoder, action_dim, mapped_hyperparams)
         return agent
     
     @classmethod
