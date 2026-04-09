@@ -1,0 +1,6 @@
+# Environment parameters: Can change based on the specific environment you want to test on
+env_config:
+    num_customers: 20
+    num_chargers: 5
+    max_battery: 500.0
+    seed': 42

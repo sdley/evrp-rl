@@ -1,0 +1,35 @@
+# Models parameters:
+a2c:
+  agent:
+    type: a2c
+    encoder:
+      type: gat
+      hidden_dim: 64
+  hyperparameters:
+    learning_rate: 0.00003
+    gamma: 0.99
+    gae_lambda: 0.95
+    entropy_coef: 0.01
+    value_coef: 0.5
+    n_steps: 2048
+    batch_size: 64
+    max_grad_norm: 0.5
+    epochs: 100
+
+sac:
+  agent:
+    type: sac
+    encoder:
+      type: gat
+      hidden_dim: 64
+  hyperparameters:
+    learning_rate: 0.0003
+    gamma: 0.99
+    tau: 0.005
+    alpha: 0.2
+    batch_size: 256
+    replay_buffer_size: 100000
+    learning_starts: 1000
+    target_update_interval: 1
+    epochs: 100
+

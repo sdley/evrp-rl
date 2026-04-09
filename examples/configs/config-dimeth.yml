@@ -1,0 +1,93 @@
+# 1- experiment metadata: 
+experiment:
+  name: "evrp_ppo_baseline"
+  description: "PPO on capacitated EVRP with charging stations"
+  output_dir: "./runs/evrp_ppo_baseline"
+  seed: 42
+  device: "cuda" # or cpu
+
+# 2- Problem definition
+problem:
+  type: "EVRP"
+  variant: "single_depot_with_charging"
+  objective: "min_distance"
+  constraints:
+    capacity: true
+    battery: true
+    time_windows: false
+    charging_stations: true
+    partial_recharge: false
+  fleet:
+    num_vehicles: 1
+  instance:
+    source: "generated"
+    num_depot: 1
+    num_customers: 20
+    num_stations: 5
+    demand_range: [1, 10]
+    battery_capacity: 100
+    vehicle_capacity: 50
+
+# 3- data
+data:
+  mode: "generated" # this is for random generation of data
+  generator:
+    coordinate_distribution: "uniform"
+    depot_location: "fixed_center"
+    customer_demand_distribution: "integer_uniform"
+    station_distribution: "random"
+    num_instances_train: 10000
+    num_instances_val: 1000
+    num_instances_test: 1000
+
+# 4- Environment configuration
+environment:
+  name: "EVRPEnv"
+  max_steps: 200
+  reward_mode: "dense"
+  infeasible_action_handling: "mask"
+  terminate_on_infeasible: false
+  normalize_observations: true
+  normalize_rewards: false
+  charging:
+    policy: "full_recharge"
+    charging_time_mode: "ignored"
+
+# 5- State representation
+state:
+  node_features:
+    - visited
+    - is_depot
+    - is_station
+    - demand
+    - x_coord
+    - y_coord
+  global_features:
+    - remaining_capacity
+    - remaining_battery
+    - current_time
+    - route_length
+  encoding:
+    include_last_node: true
+    include_first_node: false
+    include_mask: true
+
+# 6- Model architecture
+model:
+  encoder:
+    type: "GraphTransformer"
+    params:
+      hidden_dim: 128
+      num_layers: 4
+      num_heads: 8
+  algorithm:
+   name: "PPO"
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  entropy_coef: 0.01
+  value_loss_coef: 0.5
+  learning_rate: 0.0003
+  batch_size: 128
+  rollout_steps: 2048
+  update_epochs: 10
