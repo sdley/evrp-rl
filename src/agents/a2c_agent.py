@@ -287,7 +287,7 @@ class A2CAgent(BaseAgent):
                 - observations: List of observations
                 - actions: List of actions
                 - rewards: List of rewards
-                - next_observations: List of next observations
+                - next_observations: Optional list of next observations
                 - dones: List of done flags
                 - log_probs: List of action log probabilities
                 - values: List of state values
@@ -386,12 +386,32 @@ class A2CAgent(BaseAgent):
         # Compute returns and advantages
         returns = torch.zeros_like(rewards)
         advantages = torch.zeros_like(rewards)
+
+        # Use proper rollout boundary bootstrap from s_{t+1} when available.
+        # Falling back to 0.0 is safer than bootstrapping from V(s_t), which can
+        # introduce persistent optimistic bias at rollout boundaries.
+        bootstrap_value = torch.tensor(0.0, dtype=torch.float32, device=device)
+        if len(rewards) > 0 and dones[-1] < 0.5:
+            next_observations = batch.get('next_observations', None)
+            if isinstance(next_observations, list) and len(next_observations) == len(observations):
+                last_next_obs = next_observations[-1]
+                with torch.no_grad():
+                    next_obs_tensor = self._prepare_observation(last_next_obs, device=device)
+                    _, next_state_value = self.ac_network(
+                        {k: v for k, v in next_obs_tensor.items() if k in ['node_coords', 'node_demands', 'node_types', 'distance_matrix']},
+                        next_obs_tensor['current_node'],
+                        next_obs_tensor['current_battery'],
+                        next_obs_tensor['current_cargo'],
+                        next_obs_tensor['valid_actions_mask'],
+                    )
+                    bootstrap_value = next_state_value.squeeze(-1)
+                    if bootstrap_value.dim() > 0:
+                        bootstrap_value = bootstrap_value[0]
         
         # Compute n-step returns
         for t in reversed(range(len(rewards))):
             if t == len(rewards) - 1:
-                next_value = 0.0 if dones[t] else state_values[t].detach()
-                returns[t] = rewards[t] + self.gamma * next_value
+                returns[t] = rewards[t] + self.gamma * bootstrap_value * (1 - dones[t])
             else:
                 returns[t] = rewards[t] + self.gamma * returns[t + 1] * (1 - dones[t])
             
@@ -480,6 +500,8 @@ class A2CAgent(BaseAgent):
         self.optimizer.step()
         
         # Track metrics
+        mean_action_probs = probs.mean(dim=0)
+        dominant_action_prob = mean_action_probs.max().item()
         metrics = {
             'actor_loss': actor_loss.item(),
             'critic_loss': critic_loss.item(),
@@ -487,6 +509,7 @@ class A2CAgent(BaseAgent):
             'total_loss': loss.item(),
             'mean_value': state_values.mean().item(),
             'mean_advantage': advantages.mean().item(),
+            'dominant_action_prob': dominant_action_prob,
         }
         
         self.actor_losses.append(actor_loss.item())

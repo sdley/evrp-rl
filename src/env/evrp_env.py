@@ -263,6 +263,16 @@ class EVRPEnvironment(Env):
         if self.visited_customers == self.num_customers:
             valid_actions[:] = False
             valid_actions[self.depot_idx] = True
+
+        # Avoid trivial self-loops on depot/charger unless there is no alternative.
+        # This removes a frequent failure mode where the policy keeps selecting the
+        # current charging station (or depot) for many consecutive steps.
+        if self._is_depot(self.current_node) or self._is_charger(self.current_node):
+            if valid_actions[self.current_node]:
+                alternate_actions = valid_actions.copy()
+                alternate_actions[self.current_node] = False
+                if alternate_actions.any():
+                    valid_actions[self.current_node] = False
         
         # Allow depot as fallback if at least one valid action exists
         # (ensures agent can always return to depot)
@@ -337,6 +347,14 @@ class EVRPEnvironment(Env):
         
         # -0.01 per step (small time penalty)
         reward -= 0.01
+
+        # Discourage non-productive revisits to depot/chargers that can cause loops.
+        if self._is_charger(next_node):
+            reward -= 0.05
+        if self._is_depot(next_node) and self.visited_customers < self.num_customers:
+            reward -= 0.05
+        if next_node == self.current_node and (self._is_depot(next_node) or self._is_charger(next_node)):
+            reward -= 0.25
         
         # Check if visiting a new customer (check BEFORE state is updated)
         is_new_customer = self._is_customer(next_node) and not self.visited_mask[next_node]
