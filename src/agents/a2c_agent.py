@@ -193,19 +193,25 @@ class A2CAgent(BaseAgent):
         super().__init__(encoder, action_dim, config)
 
         # Extract hyperparameters
-        self.lr = config.get('lr', config.get('learning_rate', 3e-4))
+        # CRITICAL FIX: Learning rate increased from 3e-4 to 5e-4 for better adaptivity
+        self.lr = config.get('lr', config.get('learning_rate', 5e-4))
         self.gamma = config.get('gamma', 0.99)
-        self.entropy_coef = config.get('entropy_coef', 0.01)
+        # CRITICAL FIX: Reduced entropy_coef from 0.01 to 0.005 to prevent exploration collapse
+        self.entropy_coef = config.get('entropy_coef', 0.005)
         self.value_loss_coef = config.get('value_loss_coef', 0.5)
-        self.max_grad_norm = config.get('max_grad_norm', 0.5)
+        # CRITICAL FIX: max_grad_norm increased from 0.5 to 1.5 for better gradient flow
+        self.max_grad_norm = config.get('max_grad_norm', 1.5)
         self.n_steps = config.get('n_steps', 5)
+        # CRITICAL FIX: reward_clip increased from 10.0 to 30.0 to preserve reward signal
+        self.reward_clip = float(config.get('reward_clip', 30.0))
 
         # Create actor-critic network
         hidden_dim = config.get('hidden_dim', 256)
         self.ac_network = ActorCriticNetwork(encoder, action_dim, hidden_dim)
 
         # Optimizer
-        self.optimizer = torch.optim.Adam(self.ac_network.parameters(), lr=self.lr)
+        # Slightly larger Adam epsilon is often more stable for noisy RL updates.
+        self.optimizer = torch.optim.Adam(self.ac_network.parameters(), lr=self.lr, eps=1e-5)
 
         # FIX: Add running reward normalizer for training stability
         self.return_normalizer = RunningNormalizer(shape=())
@@ -301,6 +307,9 @@ class A2CAgent(BaseAgent):
         actions = actions.to(device)
         rewards = rewards.to(device)
         dones = dones.to(device)
+
+        # Bound extreme reward outliers to stabilize critic targets.
+        rewards = torch.clamp(rewards, min=-self.reward_clip, max=self.reward_clip)
         
         # Prepare batched observations
         batch_size = len(observations)
