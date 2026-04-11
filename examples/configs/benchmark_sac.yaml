@@ -4,12 +4,15 @@ agent:
     type: gat
   type: sac
 hyperparameters:
-  alpha: 0.2
+  alpha: auto
   batch_size: 256
   epochs: 100
   gamma: 0.99
-  learning_rate: 0.001
+  learning_rate: 0.0005
   learning_starts: 1000
+  max_grad_norm: 2.0
   replay_buffer_size: 100000
+  reward_clip: 30.0
+  target_entropy: null
   target_update_interval: 1
-  tau: 0.005
+  tau: 0.02
