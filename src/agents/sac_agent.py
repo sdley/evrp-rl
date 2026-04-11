@@ -297,18 +297,26 @@ class SACAgent(BaseAgent):
         super().__init__(encoder, action_dim, config)
 
         # Hyperparameters
-        self.lr = config.get('lr', config.get('learning_rate', 3e-4))
+        self.lr = config.get('lr', config.get('learning_rate', 5e-4))
         self.gamma = config.get('gamma', 0.99)
-        self.tau = config.get('tau', 0.005)
+        # CRITICAL FIX: Tau increased from 0.005 to 0.02 for faster target network updates
+        # Low tau causes massive lag in target networks, leading to divergence around iteration 800
+        self.tau = config.get('tau', 0.02)
         self.batch_size = config.get('batch_size', 256)
         self.buffer_size = config.get('buffer_size', 100000)
+        # CRITICAL FIX: max_grad_norm increased from 1.0 to 2.0 to allow better gradient flow
+        self.max_grad_norm = float(config.get('max_grad_norm', 2.0))
+        # CRITICAL FIX: reward_clip increased from 10.0 to 30.0 to preserve reward signal variance
+        self.reward_clip = float(config.get('reward_clip', 30.0))
 
         # Entropy temperature
         alpha_config = config.get('alpha', 'auto')
         if alpha_config == 'auto':
             # Automatic entropy tuning
             self.auto_entropy = True
-            self.target_entropy = config.get('target_entropy', -action_dim * 0.5)
+            # CRITICAL FIX: target_entropy less aggressive (-action_dim * 0.25 vs -0.5)
+            # This prevents alpha from growing unbounded, which causes exploration collapse
+            self.target_entropy = config.get('target_entropy', -action_dim * 0.25)
             self.log_alpha = nn.Parameter(torch.zeros(1))
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=self.lr)
             self._fixed_alpha = None
@@ -422,6 +430,9 @@ class SACAgent(BaseAgent):
         rewards = torch.tensor(batch['rewards'], dtype=torch.float, device=device)
         next_observations = batch['next_observations']
         dones = torch.tensor(batch['dones'], dtype=torch.float, device=device)
+
+        # Keep target values in a numerically stable range.
+        rewards = torch.clamp(rewards, min=-self.reward_clip, max=self.reward_clip)
         
         # FIX: Update return normalizer with rewards for tracking statistics
         self.return_normalizer.update(rewards.detach().cpu().numpy())
@@ -459,6 +470,11 @@ class SACAgent(BaseAgent):
                 next_cargos,
                 next_valid_masks,
             )
+
+            # Avoid numerical instability from exact zeros in probability/log-prob terms.
+            next_probs = torch.clamp(next_probs, min=1e-8)
+            next_probs = next_probs / next_probs.sum(dim=1, keepdim=True)
+            next_log_probs = torch.log(next_probs)
             
             # Compute target Q-values using twin critics
             next_q1_all = self.critic1_target.forward_all_actions(next_graph_data, next_batteries, next_cargos)
@@ -470,22 +486,35 @@ class SACAgent(BaseAgent):
             
             # Target: r + gamma * (1 - done) * V(s')
             q_target = rewards + self.gamma * (1 - dones) * next_v
+
+        if not torch.isfinite(q_target).all():
+            return {
+                'actor_loss': 0.0,
+                'critic1_loss': 0.0,
+                'critic2_loss': 0.0,
+                'alpha': self.alpha,
+                'alpha_loss': 0.0,
+                'mean_q': 0.0,
+            }
         
         # Current Q-values
         q1 = self.critic1(graph_data, current_batteries, current_cargos, actions)
         q2 = self.critic2(graph_data, current_batteries, current_cargos, actions)
         
         # Critic losses
-        critic1_loss = F.mse_loss(q1, q_target)
-        critic2_loss = F.mse_loss(q2, q_target)
+        # Huber is more robust than MSE under noisy/off-policy targets.
+        critic1_loss = F.smooth_l1_loss(q1, q_target)
+        critic2_loss = F.smooth_l1_loss(q2, q_target)
         
         # Update critics
         self.critic1_optimizer.zero_grad()
         critic1_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic1.parameters(), self.max_grad_norm)
         self.critic1_optimizer.step()
         
         self.critic2_optimizer.zero_grad()
         critic2_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic2.parameters(), self.max_grad_norm)
         self.critic2_optimizer.step()
         
         # Update actor
@@ -493,6 +522,9 @@ class SACAgent(BaseAgent):
         current_nodes = torch.tensor([obs['current_node'] if isinstance(obs['current_node'], (int, np.integer)) else obs['current_node'].item() for obs in observations], dtype=torch.long, device=device)
         
         probs, log_probs = self.actor(graph_data, current_nodes, current_batteries, current_cargos, valid_masks)
+        probs = torch.clamp(probs, min=1e-8)
+        probs = probs / probs.sum(dim=1, keepdim=True)
+        log_probs = torch.log(probs)
         
         # Q-values for all actions
         q1_all = self.critic1.forward_all_actions(graph_data, current_batteries, current_cargos)
@@ -504,6 +536,7 @@ class SACAgent(BaseAgent):
         
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
         self.actor_optimizer.step()
         
         # Update alpha (temperature)
@@ -514,6 +547,8 @@ class SACAgent(BaseAgent):
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
+            # Keep alpha in a sane range to prevent instability.
+            self.log_alpha.data.clamp_(-10.0, 2.0)
         else:
             alpha_loss = torch.tensor(0.0)
         
