@@ -10,9 +10,9 @@ import yaml
 import torch.nn as nn
 from pathlib import Path
 
-from src.env import EVRPEnvironment
-from src.agents import BaseAgent, A2CAgent, SACAgent
-from src.encoders import GATEncoder, MLPEncoder, Encoder
+from evrp_rl.env import EVRPEnvironment
+from evrp_rl.agents import BaseAgent, A2CAgent, SACAgent
+from evrp_rl.encoders import GATEncoder, MLPEncoder, Encoder
 
 
 class EnvFactory:
@@ -221,6 +221,64 @@ class AgentFactory:
         # Create agent
         agent_class = AgentFactory.AGENT_REGISTRY[agent_type]
         return agent_class(encoder, action_dim, full_config)
+
+    @classmethod
+    def create_from_config(cls, config_path: str, action_dim: int) -> BaseAgent:
+        """
+        Create agent from a YAML configuration file.
+
+        Args:
+            config_path: Path to YAML file (must contain an ``agent`` key).
+            action_dim: Action space dimension.
+
+        Returns:
+            Configured agent.
+        """
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        return cls.create_from_dict(config, action_dim)
+
+    @classmethod
+    def create_from_dict(cls, config: Dict[str, Any], action_dim: int) -> BaseAgent:
+        """
+        Create agent from a full experiment config dictionary.
+
+        Handles two layouts:
+
+        * Unified layout – ``config['agent']`` is a dict with keys
+          ``type``, ``encoder``, ``hyperparameters``.
+        * Legacy flat layout – ``config['agent']`` is a string (e.g. ``'a2c'``)
+          and ``config['encoder']`` / ``config['hyperparameters']`` are
+          top-level keys.
+
+        Args:
+            config: Full experiment configuration dictionary.
+            action_dim: Action space dimension.
+
+        Returns:
+            Configured agent.
+        """
+        agent_section = config.get("agent", {})
+        if isinstance(agent_section, dict):
+            agent_config = agent_section
+        else:
+            # Legacy: agent is a bare string like 'a2c'
+            agent_config = {
+                "type": str(agent_section),
+                "encoder": config.get("encoder", {}),
+                "hyperparameters": config.get("hyperparameters", {}),
+            }
+        return cls.create(agent_config, action_dim)
+
+    @classmethod
+    def get_available_agents(cls) -> list:
+        """Return list of registered agent type names."""
+        return list(cls.AGENT_REGISTRY.keys())
+
+    @classmethod
+    def get_available_encoders(cls) -> list:
+        """Return list of registered encoder type names."""
+        return list(EncoderFactory.ENCODER_REGISTRY.keys())
 
 
 class RewardModule:

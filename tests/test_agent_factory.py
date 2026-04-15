@@ -1,7 +1,7 @@
 import pytest
 
-from src.agents.agent_factory import AgentFactory
-from src.agents.base_agent import BaseAgent
+from evrp_rl.framework import AgentFactory
+from evrp_rl.agents import BaseAgent
 
 
 def test_available_registries():

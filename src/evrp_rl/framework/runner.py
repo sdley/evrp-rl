@@ -14,8 +14,8 @@ from datetime import datetime
 from collections import deque
 import matplotlib.pyplot as plt
 
-from src.env import EVRPEnvironment
-from src.agents import BaseAgent
+from evrp_rl.env import EVRPEnvironment
+from evrp_rl.agents import BaseAgent
 from .core import EnvFactory, AgentFactory, RewardModule, MaskModule
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verification script for EVRP environment."""
 
-from src.env import EVRPEnvironment
+from evrp_rl.env import EVRPEnvironment
 import numpy as np
 
 print("=" * 60)

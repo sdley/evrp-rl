@@ -2,18 +2,13 @@
 Unit tests for the modular RL framework.
 """
 
-import sys
-from pathlib import Path
-
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import pytest
 import yaml
 import tempfile
+from pathlib import Path
 import numpy as np
 
-from src.framework import (
+from evrp_rl.framework import (
     EnvFactory,
     EncoderFactory,
     AgentFactory,
@@ -24,9 +19,9 @@ from src.framework import (
     MetricsLogger,
     ExperimentRunner,
 )
-from src.env import EVRPEnvironment
-from src.encoders import MLPEncoder, GATEncoder
-from src.agents import A2CAgent, SACAgent
+from evrp_rl.env import EVRPEnvironment
+from evrp_rl.encoders import MLPEncoder, GATEncoder
+from evrp_rl.agents import A2CAgent, SACAgent
 
 
 class TestEnvFactory:

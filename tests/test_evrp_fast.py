@@ -4,7 +4,7 @@ Fast unit tests for EVRP Environment - smoke tests.
 
 import pytest
 import numpy as np
-from src.env import EVRPEnvironment
+from evrp_rl.env import EVRPEnvironment
 
 
 class TestEVRPEnvironmentBasic:

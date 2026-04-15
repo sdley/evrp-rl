@@ -1,0 +1,6 @@
+include LICENSE.txt
+include README.md
+include CHANGELOG.md
+
+recursive-include configs *.yaml
+recursive-include src/evrp_rl *.py py.typed

@@ -4,7 +4,7 @@ Unit tests for EVRP Environment.
 
 import pytest
 import numpy as np
-from src.env import EVRPEnvironment
+from evrp_rl.env import EVRPEnvironment
 
 
 class TestEVRPEnvironmentInitialization:

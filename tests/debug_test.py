@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """Quick test of EVRP environment."""
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.env import EVRPEnvironment
+from evrp_rl.env import EVRPEnvironment
 import numpy as np
 
 env = EVRPEnvironment(num_customers=3, num_chargers=1, max_battery=500.0)
@@ -16,7 +12,7 @@ print(f"  Customer range: {env.customer_start_idx} - {env.customer_end_idx}")
 print(f"  Charger range: {env.charger_start_idx} - {env.charger_end_idx}")
 
 valid_actions = obs["valid_actions_mask"]
-valid_customers = [i for i in range(env.customer_start_idx, env.customer_end_idx + 1) 
+valid_customers = [i for i in range(env.customer_start_idx, env.customer_end_idx + 1)
                   if valid_actions[i]]
 
 print(f"Valid customers: {valid_customers}")
