@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.xai.attribution import perturbation_importance, approximate_shapley
+from evrp_rl.xai import perturbation_importance, approximate_shapley
 
 
 def test_perturbation_importance_simple():

@@ -7,8 +7,8 @@ Tests both GAT and MLP encoders using synthetic EVRP instances.
 import pytest
 import torch
 import numpy as np
-from src.encoders import Encoder, GATEncoder, MLPEncoder
-from src.env import EVRPEnvironment
+from evrp_rl.encoders import Encoder, GATEncoder, MLPEncoder
+from evrp_rl.env import EVRPEnvironment
 
 
 class TestEncoderBase:

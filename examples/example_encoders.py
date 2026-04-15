@@ -10,8 +10,8 @@ This script demonstrates:
 
 import torch
 import numpy as np
-from src.env import EVRPEnvironment
-from src.encoders import GATEncoder, MLPEncoder
+from evrp_rl.env import EVRPEnvironment
+from evrp_rl.encoders import GATEncoder, MLPEncoder
 
 
 def example_single_encoding():
